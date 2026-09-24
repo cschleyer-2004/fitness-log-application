@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Fitness Tracker{% endblock %}
+
+{% block content %}
+    <h1>Your Workouts</h1>
+    <p class="subtitle">TODO: this list is placeholder data - wire it up to your database.</p>
+
+    <div class="card-list">
+        {% for workout in workouts %}
+        <div class="card">
+            <div class="card-header">
+                <span class="date">{{ workout.date }}</span>
+            </div>
+            <p class="notes">{{ workout.notes }}</p>
+            <ul class="set-list">
+                {% for set in workout.sets %}
+                <li>{{ set.exercise }} — {{ set.reps }} reps @ {{ set.weight }} lbs</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% else %}
+        <p class="empty-state">No workouts logged yet. <a href="{{ url_for('log_workout') }}">Log your first one.</a></p>
+        {% endfor %}
+    </div>
+{% endblock %}
