@@ -1,57 +1,50 @@
-// 1. On page load, grab a reference to:
-//    - the container that holds all .set-row elements
-//    - the "Save Workout" button's parent, or wherever you'll put an "Add Set" button
-
-const setsContainer =  document.querySelector(".sets-container")
-
-// 2. Add an "Add Set" button to the template (not in JS - put it in the HTML,
-//    right after the existing .set-row div)
-
-const addSetButton = document.getElementById("add-set-button")
-
-// 3. When "Add Set" is clicked:
-//    - clone the existing .set-row (or its inner HTML) as a template
-//    - reset the cloned inputs' values to empty ("" for select, "" for number inputs)
-//    - append the clone to the container
-//    - add a small "Remove" button to the new row if you want removable rows
+const setRow = document.querySelector(".set-row");
+const addSetButton = document.getElementById("add-set-button");
+const pendingList = document.getElementById("pending-sets-list");
+const hiddenContainer = document.getElementById("hidden-sets-container");
 
 addSetButton.addEventListener("click", () => {
-    const rows = setsContainer.querySelectorAll(".set-row");
-    const template = rows[0];
-    const clone = template.cloneNode(true);
+    const exerciseSelect = setRow.querySelector("select[name='exercise']");
+    const setsInput = setRow.querySelector("input[name='sets']");
+    const repsInput = setRow.querySelector("input[name='reps']");
+    const weightInput = setRow.querySelector("input[name='weight']");
 
-    // reset cloned inputs
-    clone.querySelectorAll("select, input").forEach((field) => {
-        field.value = "";
+    const exerciseId = exerciseSelect.value;
+    const exerciseLabel = exerciseSelect.options[exerciseSelect.selectedIndex].text;
+    const setsVal = setsInput.value;
+    const repsVal = repsInput.value;
+    const weightVal = weightInput.value;
+
+    if (!exerciseId || !setsVal || !repsVal || !weightVal) return;
+
+    const li = document.createElement("li");
+    li.textContent = `${exerciseLabel} — ${setsVal} x ${repsVal} @ ${weightVal} lbs `;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "remove-pending-button";
+    removeBtn.textContent = "Remove";
+    li.appendChild(removeBtn);
+
+    pendingList.appendChild(li);
+
+    removeBtn.addEventListener("click", () => {
+        li.remove();
     });
 
-    setsContainer.appendChild(clone);
+    // Hidden inputs so this entry actually submits with the form
+    ["exercise", "sets", "reps", "weight"].forEach((field, i) => {
+        const val = [exerciseId, setsVal, repsVal, weightVal][i];
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = field + "[]";
+        hidden.value = val;
+        hiddenContainer.appendChild(hidden);
+    });
+
+    // Reset the visible row for the next entry
+    exerciseSelect.value = "";
+    setsInput.value = "";
+    repsInput.value = "";
+    weightInput.value = "";
 });
-
-// 4. When a "Remove" button is clicked:
-//    - find its parent .set-row
-//    - remove it from the DOM
-//    - (optional) prevent removing the very last row, so the form always has ≥1 set
-
-setsContainer.addEventListener("click", (event) => {
-   if (!event.target.classList.contains("remove-set-button")) return;
-
-   const rows = setsContainer.querySelectorAll(".set-row");
-   if (rows.length <= 1) return; // keep at least one row
-});
-
-//# for each exercise <select> in the form (there could be more than one once rows clone):
-// #   listen for "change"
-// #   if select.value === "__new__":
-// #       find the sibling new_exercise_name input for THIS row
-// #       show it, maybe focus it
-// #   else:
-// #       hide it, clear its value
-
-addSetButton.addEventListener("change", =>{
-
-});
-
-// 5. Naming: this is the important part for the backend -
-//    every cloned row's <select> and <input> need name="exercise[]",
-//    name="reps[]", name="weight[]" (note the [] - more on this below)

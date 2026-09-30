@@ -14,7 +14,7 @@
             <p class="notes">{{ workout.notes }}</p>
             <ul class="set-list">
                 {% for set in workout.sets %}
-                <li>{{ set.exercise }} — {{ set.reps }} reps @ {{ set.weight }} lbs</li>
+                <li>{{ set.exercise.name }} — {{set.set_count}} x {{ set.rep }} reps @ {{ set.weight }} lbs = total: {{set.rep * set.set_count * set.weight}} lbs</li>
                 {% endfor %}
             </ul>
         </div>
