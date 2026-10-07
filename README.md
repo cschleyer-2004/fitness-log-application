@@ -19,7 +19,7 @@ Python, Flask, SQLAlchemy, SQLite, JavaScript, HTML/CSS
 
 1. Clone the repo and enter the folder:
 ```bash
-   git clone [your repo URL]
+   git clone https://github.com/cschleyer-2004/fitness-log-application
    cd fitness-log-application
 ```
 2. Create and activate a virtual environment:
@@ -33,7 +33,7 @@ Python, Flask, SQLAlchemy, SQLite, JavaScript, HTML/CSS
 ```
 4. Run the app:
 ```bash
-   [flask run / python app.py]
+   [flask run / python3 main.py]
 ```
 5. Open http://localhost:5000 in your browser.
 
