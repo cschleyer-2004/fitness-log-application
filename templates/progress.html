@@ -3,7 +3,6 @@
 
 {% block content %}
     <h1>Progress</h1>
-    <p class="subtitle">TODO: no chart or trend detection wired up yet - see notes below.</p>
 
     <form method="GET" class="inline-form">
         <select name="exercise_id">
@@ -15,12 +14,100 @@
         <button type="submit">View Progress</button>
     </form>
 
-    <div class="chart-placeholder">
-        <p>Chart goes here once real progress data + trend detection are wired up.</p>
-    </div>
+    <!--
+    8. Decide what to show based on state:
+       - no exercise_id picked yet -> show nothing / a neutral message
+       - exercise_id picked but sets is empty -> "no data yet" message
+       - sets has data -> show the chart + trend
+    -->
+        {% if sets %}
+            <p>Here's the trend for {{ sets[0].exercise.name }}</p>
+        {% elif selected_id %}
+            <p>No data yet</p>
+        {% else %}
+            <p>Nothing is selected</p>
+        {% endif %}
+
+    <!--
+    9. If sets has data:
+       - add a <canvas> element with some id (e.g. "progressChart") -
+         this is the empty box Chart.js will draw into
+    -->
+    {% if sets %}
+    <canvas id="progressCanvas" width="400" height="200" style="border: 1px solid #000000;">
+      Your browser does not support the HTML canvas tag.
+    </canvas>
+    {% endif %}
+
+    <!--
+    10. Also if sets has data, show a trend message using main.py's
+        `trend` variable:
+        - if trend is "improving" -> encouraging message
+        - if trend is "declining" -> neutral/informational message
+        - if trend is "steady" -> neutral message
+        - if trend is None -> "not enough history yet" message
+        (reuse the existing suggestion-placeholder div/class for this
+        for now, since you'll replace it with the real AI output later)
+    -->
+    {% if sets %}
+        {% if trend == "improving" %}
+            <p>You're doing pretty good!</p>
+        {% elif trend == "declining" %}
+            <p>Pick up the pace!</p>
+        {% elif trend == "steady" %}
+            <p>Consistency is key</p>
+        {% else %}
+            <p>Not enough history yet!</p>
+        {% endif %}
+    {% endif %}
+
+    <!--
+    11. Load Chart.js itself from a CDN <script> tag, same way you'd
+        load any external JS library - this needs to load BEFORE your
+        own script that uses the Chart object
+    -->
+
+    {% if sets %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    {% endif %}
+
+    <!--
+    12. Only output your chart-building <script> block if sets has data
+        (no point running Chart.js against nothing)
+
+        Inside that script:
+        a. get a reference to the <canvas> element by its id
+        b. create `new Chart(reference, { ...config... })`
+        c. in the config:
+           - type: what kind of chart ("line" fits progress-over-time)
+           - data.labels: your chart_dates list from main.py -
+             use Jinja's `| tojson` filter to safely convert the
+             Python list into a real JS array inline in the HTML
+           - data.datasets: an array with one object describing this
+             line - needs a label (e.g. "Weight (lbs)") and
+             data: chart_weights, again passed through `| tojson`
+    -->
+
+    {% if sets %}
+    <script>
+            const canvas = document.getElementById("progressCanvas");
+
+            new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: {{ chart_dates | tojson }},
+                    datasets: [{
+                        label: 'Weight (lbs)',
+                        data: {{ chart_weights | tojson }}
+                    }]
+                }
+            });
+        </script>
+    {% endif %}
 
     <div class="suggestion-placeholder">
         <h2>AI Suggestion</h2>
         <p>Placeholder for the LLM-generated adaptive suggestion, once that endpoint exists.</p>
     </div>
+
 {% endblock %}

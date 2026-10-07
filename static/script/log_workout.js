@@ -17,7 +17,9 @@ addSetButton.addEventListener("click", () => {
     const weightInput = setRow.querySelector("input[name='weight']");
 
     // Pull out the actual values the user typed/selected right now
-    const exerciseId = exerciseSelect.value;   // the <option>'s value (an exercise's DB id)
+    const exerciseId = exerciseSelect.value === "__new__"
+            ? "new: " + newExerciseInput.value
+            : exerciseSelect.value;   // the <option>'s value (an exercise's DB id)
     const exerciseLabel = exerciseSelect.value === "__new__"
     ? newExerciseInput.value
     : exerciseSelect.options[exerciseSelect.selectedIndex].text;// the human-readable name, for display only

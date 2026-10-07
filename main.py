@@ -1,11 +1,16 @@
+import os
 from decimal import Decimal
 
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
+from werkzeug.security import generate_password_hash, check_password_hash
+
 app = Flask(__name__)
 
+#define the key
+app.config["SECRET_KEY"] = "pingas"
 #add database
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///db.sqlite3"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -48,30 +53,71 @@ class Set_Entries(db.Model):
     rep = db.Column(db.Integer)
     weight = db.Column(db.Numeric(6,2))
 
+#routes
+
 @app.route("/")
 def index():
-    workouts = Workouts.query.filter_by(user_id = 1).order_by(Workouts.id.desc()).all()
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    workouts = Workouts.query.filter_by(
+        user_id = session["user_id"]
+    ).order_by(Workouts.id.desc()).all()
+
     return render_template("index.html", workouts= workouts)
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return render_template("login.html")
+
+    if request.method == "POST":
+        attempted_password = request.form["password"]
+        user = Users.query.filter_by(username=request.form["username"]).first()
+
+        if user is None:
+            return render_template("login.html", error="No account with that email exists")
+        if check_password_hash(user.password, attempted_password):
+            session["user_id"] = user.id
+            return redirect(url_for("index"))
+        else:
+            return render_template("login.html", error="Incorrect Password")
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "GET":
+        return render_template("signup.html")
+
+    if request.method == "POST":
+        username = request.form["username"]
+        email = request.form["email"]
+        password = request.form["password"]
+        confirm_password = request.form["confirm_password"]
+
+        if password != confirm_password:
+            return render_template("signup.html", error="Passwords don't match")
+
+        if Users.query.filter_by(username=username).first():
+            return render_template("signup.html", error="Username already exists")
+
+        if Users.query.filter_by(email=email).first():
+            return render_template("signup.html", error="Email already exists")
+
+        hashed = generate_password_hash(password)
+
+        new_user = Users(username=username, email=email, password=hashed)
+        db.session.add(new_user)
+        db.session.commit()
+    return render_template("login.html")
 
 @app.route("/log", methods=["GET", "POST"])
 def log_workout():
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+
     if request.method == "GET":
         exercises = Exercises.query.all()
 
     if request.method == "POST":
-        '''
-        # 1. Pull the submitted values out of the form
-        #    - date and notes are still single values
-        #    - exercise/sets/reps/weight now come in as LISTS, one entry per
-        #      "Add" click, since the JS submits them as exercise[], sets[], etc.
-        #    - use request.form.getlist(...) instead of request.form[...] for those
-        date_str = get "date" from request.form
-        notes = get "notes" from request.form
-        exercise_ids = getlist "exercise[]" from request.form
-        sets_list = getlist "sets[]" from request.form
-        reps_list = getlist "reps[]" from request.form
-        weights_list = getlist "weight[]" from request.form
-        '''
 
         date_str = request.form["date"]
         notes = request.form["notes"]
@@ -80,47 +126,28 @@ def log_workout():
         reps_list = request.form.getlist("reps[]")
         weights_list = request.form.getlist("weight[]")
 
-        '''
-        # 2. Convert types where needed
-        #    - date_str comes in as a string, your model wants a DateTime
-        #    - the four lists above still hold everything as strings -
-        #      conversion now happens per-item, inside the loop in step 4,
-        #      since each list can hold more than one entry
-        '''
         date = datetime.strptime(date_str, "%Y-%m-%d")
 
-        '''
-        # 3. Create the parent row first
-        new_workout = Workouts(user_id=1, date=<converted date>, notes=notes)
-        add new_workout to db.session
-        commit  # <-- must commit here so new_workout.id actually exists
-        '''
-        new_workout = Workouts(user_id=1, date=date, notes=notes)
+        new_workout = Workouts(user_id=session["user_id"], date=date, notes=notes)
         db.session.add(new_workout)
         db.session.commit()
 
-        '''
-        # 4. Now create ONE child row PER entry the user added, referencing
-        #    the parent's real id.
-        #    - zip() walks all four lists together, position by position,
-        #      so item 0 of each list belongs to the same "Add" click,
-        #      item 1 of each list belongs to the next one, and so on
-        #    - convert each item's types inside the loop
+
         for exercise_id, sets_val, reps_val, weight_val in zip(exercise_ids, sets_list, reps_list, weights_list):
+            if exercise_id.startswith("new:"):
+                new_name = exercise_id[len("new:"):]
+                existing = Exercises.query.filter_by(name=new_name).first()
+                if existing is None:
+                    existing = Exercises(name=new_name)
+                    db.session.add(existing)
+                    db.session.commit()  # commit now so existing.id is real
+                resolved_exercise_id = existing.id
+            else:
+                resolved_exercise_id = int(exercise_id)
+
             new_set = Set_Entries(
                 workout_id=new_workout.id,
-                exercise_id=<converted to int>,
-                set_count=<converted to int>,
-                rep=<converted to int>,
-                weight=<converted to decimal>
-            )
-            add new_set to db.session
-        commit once, after the loop finishes
-        '''
-        for exercise_id, sets_val, reps_val, weight_val in zip(exercise_ids, sets_list, reps_list, weights_list):
-            new_set = Set_Entries(
-                workout_id=new_workout.id,
-                exercise_id=int(exercise_id),
+                exercise_id=resolved_exercise_id,
                 set_count=int(sets_val),
                 rep=int(reps_val),
                 weight=Decimal(weight_val)
@@ -128,60 +155,52 @@ def log_workout():
             db.session.add(new_set)
         db.session.commit()
 
-        '''
-        # 5. Don't fall through to render_template - redirect instead
-        redirect to index route
-        '''
+
         return redirect(url_for("index"))
 
-    return render_template("log_workout.html", exercises=exercises)
+    return render_template("log_workout.html", exercises= exercises)
 
 @app.route("/progress")
 def progress():
-
-    '''
-    # 1. Get the exercise to show progress for
-    #    - read "exercise_id" from the query string (request.args)
-    #    - it'll arrive as a string or None if not provided
-    exercise_id = get "exercise_id" from request.args, default None
-    '''
-
+    if "user_id" not in session:
+        return redirect(url_for("login"))
+    
     exercise_id = request.args.get("exercise_id")
 
-
-    '''   
-    # 2. Get the list of all exercises (for a dropdown so the user can pick one)
-    '''
     exercises = Exercises.query.all()
 
-    '''
-    # 3. Decide what to do if no exercise_id was given yet
-    #    - e.g. just render the page with the exercise list, no history yet
-    '''
     if exercise_id is None:
-        return render_template("progress.html", exercises=exercises, sets=None)
+        return render_template("progress.html", exercises=exercises, sets=None, chart_dates = [], chart_weights = [], trend=None)
 
-    '''
-    # 4. Otherwise, convert exercise_id to int and query the history
-    #    - join Set_Entries -> Workouts so you can filter by user and order by date
-    #    - filter: Set_Entries.exercise_id == exercise_id AND Workouts.user_id == 1
-    #    - order_by: Workouts.date ascending (so progress reads chronologically)
-    '''
     sets = (Set_Entries.query.join(Workouts).
-            filter(Set_Entries.exercise_id == exercise_id, Workouts.user_id == 1).
+            filter(Set_Entries.exercise_id == exercise_id, Workouts.user_id == session["user_id"]).
             order_by(Workouts.date).
             all())
 
-    '''
-    # 5. (Optional, later) run trend/plateau detection on `sets`
-    #    - e.g. compare weight/reps over the last N sessions
-    '''
+    chart_dates = []
+    chart_weights = []
+    for entry in sets:
+        chart_dates.append(entry.workout.date.strftime("%Y-%m-%d"))
+        chart_weights.append(float(entry.weight))
 
-    '''
-    # 6. Pass exercises + sets (+ selected exercise_id) into the template
-    '''
+    trend = None
+    if len(sets) >= 2:
+        if sets[-1].weight > sets[-2].weight:
+            trend = "improving"
+        elif sets[-1].weight < sets[-2].weight:
+            trend = "declining"
+        else:
+            trend = "steady"
 
-    return render_template("progress.html", exercises=exercises, sets=sets, selected_id=exercise_id)
+    return render_template(
+        "progress.html",
+        exercises=exercises,
+        sets=sets,
+        selected_id=exercise_id,
+        chart_dates=chart_dates,
+        chart_weights=chart_weights,
+        trend=trend
+    )
 
 
 default_exercises = [
